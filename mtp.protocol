@@ -13,3 +13,4 @@ moving=true
 copyFromFile=true
 copyToFile=true
 Icon=network-workgroup
+maxInstances=1

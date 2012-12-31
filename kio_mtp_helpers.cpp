@@ -363,21 +363,21 @@ QMap<QString, LIBMTP_raw_device_t*> getRawDevices()
     {
         for ( int i = 0; i < numrawdevices; i++ )
         {
-            LIBMTP_mtpdevice_t *device = LIBMTP_Open_Raw_Device_Uncached ( &rawdevices[i] );
+//             LIBMTP_mtpdevice_t *device = LIBMTP_Open_Raw_Device_Uncached ( &rawdevices[i] );
+// 
+//             char *deviceName = LIBMTP_Get_Friendlyname ( device );
+//             char *deviceModel = LIBMTP_Get_Modelname ( device );
+// 
+//             // prefer friendly devicename over model
+//             QString name;
+//             if ( !deviceName )
+//                 name = QString::fromUtf8 ( deviceModel );
+//             else
+//                 name = QString::fromUtf8 ( deviceName );
 
-            char *deviceName = LIBMTP_Get_Friendlyname ( device );
-            char *deviceModel = LIBMTP_Get_Modelname ( device );
+		devices.insert ( QString::fromUtf8(rawdevices[i].device_entry.product), &rawdevices[i] );
 
-            // prefer friendly devicename over model
-            QString name;
-            if ( !deviceName )
-                name = QString::fromUtf8 ( deviceModel );
-            else
-                name = QString::fromUtf8 ( deviceName );
-
-            devices.insert ( name, &rawdevices[i] );
-
-            LIBMTP_Release_Device ( device );
+//             LIBMTP_Release_Device ( device );
         }
     }
     break;

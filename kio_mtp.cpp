@@ -21,6 +21,7 @@
 
 #include <KComponentData>
 #include <KTemporaryFile>
+#include <KStandardDirs>
 #include <QFileInfo>
 #include <QDateTime>
 #include <QCoreApplication>
@@ -29,6 +30,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <solid/device.h>
 #include <solid/genericinterface.h>
 
@@ -59,19 +64,77 @@ int KDE_EXPORT kdemain ( int argc, char **argv )
 }
 
 MTPSlave::MTPSlave ( const QByteArray& pool, const QByteArray& app )
-    : SlaveBase ( "mtp", pool, app )
+    : SlaveBase ( "mtp", pool, app ),
+    m_device(0)
 {
     LIBMTP_Init();
 
     fileCache = new FileCache ( this );
     fileCache->start();
-
+    
+    m_lockFile = KStandardDirs::locateLocal("tmp", QString::fromUtf8("kio-mtp"));
+    
     kDebug ( KIO_MTP ) << "Slave started";
 }
 
 MTPSlave::~MTPSlave()
 {
     fileCache->exit();
+    closeDevice();
+}
+
+bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
+{
+	kDebug ( KIO_MTP ) << "Opening device ...";
+	if (m_device)
+	{
+		kDebug ( KIO_MTP ) << "Device already open !";
+		return true;
+	}
+
+// 	if (QFile::exists(m_lockFile))
+// 	{
+// 		kDebug ( KIO_MTP ) << "MTP device already locked !";
+// 		return false;
+// 	}
+// 
+// 	int fd = ::open(m_lockFile.toUtf8(),O_CREAT|O_WRONLY,0600);
+// 	if (fd == -1)
+// 	{
+// 		kDebug ( KIO_MTP ) << "Could not create lock file !";
+// 		return false;
+// 	}
+// 	::close(fd);
+
+	m_device = LIBMTP_Open_Raw_Device_Uncached(rawDevice);
+	if (!m_device)
+	{
+		kDebug ( KIO_MTP ) << "Could not open MTP device !";
+		return false;
+	}
+
+	kDebug ( KIO_MTP ) << "Device opened !";
+	return true;
+}
+
+void MTPSlave::closeDevice()
+{
+	if (!m_device)
+	{
+		kDebug ( KIO_MTP ) << "Nothing to close ...";
+		return;
+	}
+
+	LIBMTP_Release_Device(m_device);
+	m_device = 0;
+// 	int ret = ::remove(m_lockFile.toUtf8());
+// 
+// 	if (ret != 0)
+// 	{
+// 		kDebug ( KIO_MTP ) << "Unable to remove lock file !";
+// 	}
+
+	kDebug ( KIO_MTP ) << "Device closed !";
 }
 
 /**
@@ -95,16 +158,18 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
     }
 
     QMap<QString, LIBMTP_raw_device_t*> devices = getRawDevices();
-
     if ( devices.contains ( pathItems.at ( 0 ) ) )
     {
-        LIBMTP_mtpdevice_t *device = LIBMTP_Open_Raw_Device_Uncached ( devices.value ( pathItems.at ( 0 ) ) );
+        openDevice ( devices.value ( pathItems.at ( 0 ) ) );
+    }
 
+    if ( m_device )
+    {
         // return specific device
         if ( pathItems.size() == 1 )
         {
-            ret.first = device;
-            ret.second = device;
+            ret.first = m_device;
+            ret.second = m_device;
 
             kDebug(KIO_MTP) << "returning LIBMTP_mtpdevice_t";
         }
@@ -117,12 +182,12 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
             {
                 kDebug() << "Match found in cache, checking device";
 
-                LIBMTP_file_t* file = LIBMTP_Get_Filemetadata ( device, c_fileID );
+                LIBMTP_file_t* file = LIBMTP_Get_Filemetadata ( m_device, c_fileID );
                 if ( file )
                 {
                     kDebug ( KIO_MTP ) << "Found file in cache";
                     ret.first = file;
-                    ret.second = device;
+                    ret.second = m_device;
 
                     kDebug(KIO_MTP) << "returning LIBMTP_file_t";
 
@@ -137,20 +202,20 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
 
                 kDebug() << "Match for parent found in cache, checking device";
 
-                LIBMTP_file_t* parent = LIBMTP_Get_Filemetadata ( device, c_parentID );
+                LIBMTP_file_t* parent = LIBMTP_Get_Filemetadata ( m_device, c_parentID );
                 if ( parent )
                 {
                     kDebug ( KIO_MTP ) << "Found parent in cache";
                     fileCache->addPath( parentPath, c_parentID );
 
-                    QMap<QString, LIBMTP_file_t*> files = getFiles ( device, parent->storage_id, c_parentID );
+                    QMap<QString, LIBMTP_file_t*> files = getFiles ( m_device, parent->storage_id, c_parentID );
 
                     if ( files.contains ( pathItems.last() ) )
                     {
                         LIBMTP_file_t* file = files.value( pathItems.last() );
 
                         ret.first = file;
-                        ret.second = device;
+                        ret.second = m_device;
 
                         kDebug(KIO_MTP) << "returning LIBMTP_file_t";
 
@@ -162,7 +227,7 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
             }
         }
 
-        QMap<QString, LIBMTP_devicestorage_t*> storages = getDevicestorages ( device );
+        QMap<QString, LIBMTP_devicestorage_t*> storages = getDevicestorages ( m_device );
 
         if ( pathItems.size() > 1 && storages.contains ( pathItems.at ( 1 ) ) )
         {
@@ -171,7 +236,7 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
             if ( pathItems.size() == 2 )
             {
                 ret.first = storage;
-                ret.second = device;
+                ret.second = m_device;
 
                 kDebug(KIO_MTP) << "returning LIBMTP_devicestorage_t";
 
@@ -185,7 +250,7 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
             // traverse further while depth not reached
             while ( currentLevel < pathItems.size() )
             {
-                files = getFiles ( device, storage->id, currentParent );
+                files = getFiles ( m_device, storage->id, currentParent );
 
                 if ( files.contains ( pathItems.at ( currentLevel ) ) )
                 {
@@ -201,8 +266,8 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
                 currentLevel++;
             }
 
-            ret.first = LIBMTP_Get_Filemetadata ( device, currentParent );
-            ret.second = device;
+            ret.first = LIBMTP_Get_Filemetadata ( m_device, currentParent );
+            ret.second = m_device;
 
             fileCache->addPath ( path, currentParent );
         }
@@ -250,7 +315,6 @@ int MTPSlave::checkUrl ( const KUrl& url, bool redirect )
                 newUrl.setProtocol ( QLatin1String ( "mtp" ) );
                 newUrl.setPath ( QLatin1Char ( '/' ) + deviceName );
                 redirection ( newUrl );
-
                 return 1;
             }
         }
@@ -287,6 +351,7 @@ void MTPSlave::listDir ( const KUrl& url )
     UDSEntry entry;
 
     QMap<QString, LIBMTP_raw_device_t*> devices = getRawDevices();
+    QPair<void*, LIBMTP_mtpdevice_t*> pair = getPath ( url.path() );
 
     // list devices
     if ( pathItems.size() == 0 )
@@ -294,17 +359,10 @@ void MTPSlave::listDir ( const KUrl& url )
         kDebug ( KIO_MTP ) << "Root directory, listing devices";
         totalSize ( devices.size() );
 
-        foreach ( const QString &deviceName, devices.keys() )
-        {
-            LIBMTP_mtpdevice_t *device = LIBMTP_Open_Raw_Device_Uncached ( devices.value ( deviceName ) );
+	getEntry ( entry, pair.second );
 
-            getEntry ( entry, device );
-
-            LIBMTP_Release_Device ( device );
-
-            listEntry ( entry, false );
-            entry.clear();
-        }
+	listEntry ( entry, false );
+	entry.clear();
 
         listEntry ( entry, true );
 
@@ -387,8 +445,6 @@ void MTPSlave::listDir ( const KUrl& url )
                 kDebug ( KIO_MTP ) << "[SUCCESS] Files";
             }
 
-            LIBMTP_Release_Device ( pair.second );
-
             finished();
         }
         else
@@ -454,8 +510,6 @@ void MTPSlave::stat ( const KUrl& url )
         {
             getEntry ( entry, ( LIBMTP_file_t* ) pair.first );
         }
-
-        LIBMTP_Release_Device ( pair.second );
     }
     statEntry ( entry );
     finished();
@@ -649,8 +703,6 @@ void MTPSlave::get ( const KUrl& url )
         }
         else
             error ( ERR_DOES_NOT_EXIST, url.path() );
-
-        LIBMTP_Release_Device ( pair.second );
     }
     else
         error ( ERR_UNSUPPORTED_ACTION, url.path() );
@@ -904,7 +956,6 @@ void MTPSlave::del ( const KUrl& url, bool )
     int ret = LIBMTP_Delete_Object ( pair.second, file->item_id );
 
     LIBMTP_destroy_file_t ( file );
-    LIBMTP_Release_Device ( pair.second );
 
     if ( ret != 0 )
     {
@@ -988,7 +1039,6 @@ void MTPSlave::rename ( const KUrl& src, const KUrl& dest, JobFlags flags )
             }
 
             LIBMTP_destroy_file_t ( source );
-            LIBMTP_Release_Device ( pair.second );
         }
 
         finished();
