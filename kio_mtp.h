@@ -57,6 +57,7 @@ private:
     int checkUrl( const KUrl& url, bool redirect = true );
     FileCache *fileCache;
     LIBMTP_mtpdevice_t *m_device;
+    LIBMTP_raw_device_t *m_deviceInfo;
     QString m_lockFile;
     QPair<void*, LIBMTP_mtpdevice_t*> getPath( const QString& path );
     bool openDevice(LIBMTP_raw_device_t *rawDevice);

@@ -65,7 +65,8 @@ int KDE_EXPORT kdemain ( int argc, char **argv )
 
 MTPSlave::MTPSlave ( const QByteArray& pool, const QByteArray& app )
     : SlaveBase ( "mtp", pool, app ),
-    m_device(0)
+    m_device(0),
+    m_deviceInfo(0)
 {
     LIBMTP_Init();
 
@@ -88,8 +89,17 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 	kDebug ( KIO_MTP ) << "Opening device ...";
 	if (m_device)
 	{
-		kDebug ( KIO_MTP ) << "Device already open !";
-		return true;
+		if (rawDevice->device_entry.vendor_id == m_deviceInfo->device_entry.vendor_id
+			&& rawDevice->device_entry.product_id == m_deviceInfo->device_entry.product_id
+			&& rawDevice->bus_location == m_deviceInfo->bus_location
+			&& rawDevice->devnum == m_deviceInfo->devnum)
+		{
+			kDebug ( KIO_MTP ) << "Device already open !";
+			return true;
+		}
+
+		kDebug ( KIO_MTP ) << "A new device needs to be opened, closing the previous one ...";
+		closeDevice();
 	}
 
 // 	if (QFile::exists(m_lockFile))
@@ -113,6 +123,7 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 		return false;
 	}
 
+	m_deviceInfo = rawDevice;
 	kDebug ( KIO_MTP ) << "Device opened !";
 	return true;
 }
@@ -127,6 +138,7 @@ void MTPSlave::closeDevice()
 
 	LIBMTP_Release_Device(m_device);
 	m_device = 0;
+	m_deviceInfo = 0;
 // 	int ret = ::remove(m_lockFile.toUtf8());
 // 
 // 	if (ret != 0)
@@ -352,6 +364,7 @@ void MTPSlave::listDir ( const KUrl& url )
 
     QMap<QString, LIBMTP_raw_device_t*> devices = getRawDevices();
     QPair<void*, LIBMTP_mtpdevice_t*> pair = getPath ( url.path() );
+    LIBMTP_mtpdevice_t *device = pair.second;
 
     // list devices
     if ( pathItems.size() == 0 )
@@ -372,13 +385,8 @@ void MTPSlave::listDir ( const KUrl& url )
     // traverse into device
     else if ( devices.contains ( pathItems.at ( 0 ) ) )
     {
-        QPair<void*, LIBMTP_mtpdevice_t*> pair = getPath ( url.path() );
-        UDSEntry entry;
-
         if ( pair.first )
         {
-            LIBMTP_mtpdevice_t *device = pair.second;
-
             // Device, list storages
             if ( pathItems.size() == 1 )
             {
