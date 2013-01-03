@@ -84,6 +84,12 @@ MTPSlave::~MTPSlave()
     closeDevice();
 }
 
+void MTPSlave::special ( const QByteArray& data )
+{
+	kDebug ( KIO_MTP ) << "Idle timeout, we can now close the session";
+	closeDevice();
+}
+
 bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 {
 	kDebug ( KIO_MTP ) << "Opening device ...";
@@ -94,6 +100,7 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 			&& rawDevice->bus_location == m_deviceInfo->bus_location
 			&& rawDevice->devnum == m_deviceInfo->devnum)
 		{
+			setTimeoutSpecialCommand(3);
 			kDebug ( KIO_MTP ) << "Device already open !";
 			return true;
 		}
@@ -124,6 +131,7 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 	}
 
 	m_deviceInfo = rawDevice;
+	setTimeoutSpecialCommand(3);
 	kDebug ( KIO_MTP ) << "Device opened !";
 	return true;
 }

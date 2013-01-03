@@ -70,6 +70,7 @@ public:
     MTPSlave ( const QByteArray& pool, const QByteArray& app );
     virtual ~MTPSlave();
 
+    virtual void special ( const QByteArray& data );
     virtual void listDir ( const KUrl& url );
     virtual void stat ( const KUrl& url );
     virtual void mimetype ( const KUrl& url );
