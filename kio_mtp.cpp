@@ -21,11 +21,11 @@
 
 #include <KComponentData>
 #include <KTemporaryFile>
-#include <KStandardDirs>
 #include <QFileInfo>
 #include <QDateTime>
 #include <QCoreApplication>
 #include <QTimer>
+#include <QtDBus/QtDBus>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -73,8 +73,6 @@ MTPSlave::MTPSlave ( const QByteArray& pool, const QByteArray& app )
     fileCache = new FileCache ( this );
     fileCache->start();
     
-    m_lockFile = KStandardDirs::locateLocal("tmp", QString::fromUtf8("kio-mtp"));
-    
     kDebug ( KIO_MTP ) << "Slave started";
 }
 
@@ -86,6 +84,7 @@ MTPSlave::~MTPSlave()
 
 void MTPSlave::special ( const QByteArray& data )
 {
+	Q_UNUSED(data);
 	kDebug ( KIO_MTP ) << "Idle timeout, we can now close the session";
 	closeDevice();
 }
@@ -109,19 +108,20 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 		closeDevice();
 	}
 
-// 	if (QFile::exists(m_lockFile))
-// 	{
-// 		kDebug ( KIO_MTP ) << "MTP device already locked !";
-// 		return false;
-// 	}
-// 
-// 	int fd = ::open(m_lockFile.toUtf8(),O_CREAT|O_WRONLY,0600);
-// 	if (fd == -1)
-// 	{
-// 		kDebug ( KIO_MTP ) << "Could not create lock file !";
-// 		return false;
-// 	}
-// 	::close(fd);
+	if (!QDBusConnection::sessionBus().isConnected())
+	{
+		QDBusError error(QDBusConnection::sessionBus().lastError());
+		kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
+	}
+	else if (!QDBusConnection::sessionBus().registerService(QString::fromUtf8("org.kde.kio_mtp")))
+	{
+		kDebug ( KIO_MTP ) << "DBUS Service already registered, another kioslave is using the device !";
+		return false;
+	}
+	else
+	{
+		kDebug ( KIO_MTP ) << "DBUS Service registration successful !";
+	}
 
 	m_device = LIBMTP_Open_Raw_Device_Uncached(rawDevice);
 	if (!m_device)
@@ -147,13 +147,20 @@ void MTPSlave::closeDevice()
 	LIBMTP_Release_Device(m_device);
 	m_device = 0;
 	m_deviceInfo = 0;
-// 	int ret = ::remove(m_lockFile.toUtf8());
-// 
-// 	if (ret != 0)
-// 	{
-// 		kDebug ( KIO_MTP ) << "Unable to remove lock file !";
-// 	}
 
+	if (!QDBusConnection::sessionBus().isConnected())
+	{
+		QDBusError error(QDBusConnection::sessionBus().lastError());
+		kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
+	}
+	else if (!QDBusConnection::sessionBus().unregisterService(QString::fromUtf8("org.kde.kio_mtp")))
+	{
+		kDebug ( KIO_MTP ) << "DBUS Service unregistration failed !";
+	}
+	else
+	{
+		kDebug ( KIO_MTP ) << "DBUS Service unregistration successful !";
+	}
 	kDebug ( KIO_MTP ) << "Device closed !";
 }
 
