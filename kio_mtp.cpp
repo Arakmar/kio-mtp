@@ -113,9 +113,15 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 		QDBusError error(QDBusConnection::sessionBus().lastError());
 		kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
 	}
-	else if (!QDBusConnection::sessionBus().registerService(QString::fromUtf8("org.kde.kio_mtp")))
+	else if (!QDBusConnection::sessionBus().registerService("org.kde.kio_mtp"))
 	{
 		kDebug ( KIO_MTP ) << "DBUS Service already registered, another kioslave is using the device !";
+		kDebug ( KIO_MTP ) << "Trying to wait for the release of the device ...";
+		while (!QDBusConnection::sessionBus().registerService("org.kde.kio_mtp"))
+		{
+			sleep(1);
+		}
+		kDebug ( KIO_MTP ) << "The device is free !";
 		return false;
 	}
 	else
@@ -133,6 +139,7 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 	m_deviceInfo = rawDevice;
 	setTimeoutSpecialCommand(3);
 	kDebug ( KIO_MTP ) << "Device opened !";
+
 	return true;
 }
 
@@ -153,7 +160,7 @@ void MTPSlave::closeDevice()
 		QDBusError error(QDBusConnection::sessionBus().lastError());
 		kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
 	}
-	else if (!QDBusConnection::sessionBus().unregisterService(QString::fromUtf8("org.kde.kio_mtp")))
+	else if (!QDBusConnection::sessionBus().unregisterService("org.kde.kio_mtp"))
 	{
 		kDebug ( KIO_MTP ) << "DBUS Service unregistration failed !";
 	}
