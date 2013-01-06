@@ -438,6 +438,10 @@ QMap<QString, LIBMTP_file_t*> getFiles ( LIBMTP_mtpdevice_t *&device, uint32_t s
 
 void getEntry ( UDSEntry &entry, LIBMTP_raw_device_t* device )
 {
+    if (!device)
+    {
+        return;
+    }
     // prefer friendly devicename over model
     QString deviceName = device->device_entry.product;
 

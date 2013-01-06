@@ -322,11 +322,13 @@ int MTPSlave::checkUrl ( const KUrl& url, bool redirect )
         kDebug ( KIO_MTP ) << "udi = " << udi;
 
         Solid::Device device ( udi );
-        if ( !device.isValid() )
+        if ( !device.isValid() || !device.isDeviceInterface(Solid::DeviceInterface::PortableMediaPlayer) )
         {
+            kDebug ( KIO_MTP ) << "The device " << udi << " isn't valid !";
             return 2;
         }
         Solid::GenericInterface *iface = device.as<Solid::GenericInterface>();
+
         QMap<QString, QVariant> properties = iface->allProperties();
 
         int busnum = properties.value ( QLatin1String ( "BUSNUM" ) ).toInt();
@@ -551,7 +553,8 @@ void MTPSlave::stat ( const KUrl& url )
         else if ( pathItems.size() < 2 )
         {
             QMap<QString, LIBMTP_raw_device_t*> devices = getRawDevices();
-            getEntry(entry, devices.value(pathItems.at(0)));
+            LIBMTP_raw_device_t *device = devices.value(pathItems.at(0));
+            getEntry(entry, device);
         }
         // Storage
         else if ( pathItems.size() < 3 )
