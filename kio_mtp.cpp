@@ -376,9 +376,11 @@ void MTPSlave::listDir ( const KUrl& url )
             finished();
             return;
         case 2:
+            listEntry ( UDSEntry(), true );
             error( ERR_DOES_NOT_EXIST, url.path() );
             return;
         default:
+            listEntry ( UDSEntry(), true );
             error( ERR_MALFORMED_URL, url.path() );
             return;
     }
