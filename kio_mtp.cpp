@@ -123,7 +123,6 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 			sleep(1);
 		}
 		kDebug ( KIO_MTP ) << "The device is free !";
-		return false;
 	}
 	else
 	{
