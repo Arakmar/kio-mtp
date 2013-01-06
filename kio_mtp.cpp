@@ -36,6 +36,7 @@
 #include <unistd.h>
 #include <solid/device.h>
 #include <solid/genericinterface.h>
+#include <solid/devicenotifier.h>
 
 #include "kio_mtp_helpers.cpp"
 
@@ -389,15 +390,35 @@ void MTPSlave::listDir ( const KUrl& url )
     LIBMTP_mtpdevice_t *device = pair.second;
 
     // list devices
-    if ( pathItems.size() == 0 )
+    if ( pathItems.size() == 0 || !device)
     {
         kDebug ( KIO_MTP ) << "Root directory, listing devices";
-        totalSize ( devices.size() );
 
-	getEntry ( entry, pair.second );
+        QList< Solid::Device > list = Solid::Device::listFromType(Solid::DeviceInterface::PortableMediaPlayer, QString());
 
-	listEntry ( entry, false );
-	entry.clear();
+        totalSize ( list.size() );
+
+        foreach (Solid::Device solidDevice, list)
+        {
+                Solid::GenericInterface *iface = solidDevice.as<Solid::GenericInterface>();
+                QMap<QString, QVariant> properties = iface->allProperties();
+
+                int busnum = properties.value ( QLatin1String ( "BUSNUM" ) ).toInt();
+                int devnum = properties.value ( QLatin1String ( "DEVNUM" ) ).toInt();
+                foreach ( const QString &deviceName, devices.keys() )
+                {
+                        LIBMTP_raw_device_t* rawDevice = devices.value ( deviceName );
+                        int currentBusNum = rawDevice->bus_location;
+                        int currentDevNum = rawDevice->devnum;
+                        if ( currentBusNum == busnum && currentDevNum == devnum )
+                        {
+                                getEntry ( entry, rawDevice );
+                                listEntry ( entry, false );
+                                entry.clear();
+                                kDebug ( KIO_MTP ) << "Found " << deviceName;
+                        }
+                }
+        }
 
         listEntry ( entry, true );
 
@@ -425,6 +446,7 @@ void MTPSlave::listDir ( const KUrl& url )
 
                         listEntry ( entry, false );
                         entry.clear();
+                        kDebug ( KIO_MTP ) << "Found " << storageName;
                     }
 
                     listEntry ( entry, true );
@@ -528,7 +550,8 @@ void MTPSlave::stat ( const KUrl& url )
         // Device
         else if ( pathItems.size() < 2 )
         {
-            getEntry ( entry, pair.second );
+            QMap<QString, LIBMTP_raw_device_t*> devices = getRawDevices();
+            getEntry(entry, devices.value(pathItems.at(0)));
         }
         // Storage
         else if ( pathItems.size() < 3 )

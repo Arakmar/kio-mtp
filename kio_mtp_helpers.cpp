@@ -436,17 +436,10 @@ QMap<QString, LIBMTP_file_t*> getFiles ( LIBMTP_mtpdevice_t *&device, uint32_t s
     return fileMap;
 }
 
-void getEntry ( UDSEntry &entry, LIBMTP_mtpdevice_t* device )
+void getEntry ( UDSEntry &entry, LIBMTP_raw_device_t* device )
 {
-    char *charName = LIBMTP_Get_Friendlyname ( device );
-    char *charModel = LIBMTP_Get_Modelname ( device );
-
     // prefer friendly devicename over model
-    QString deviceName;
-    if ( !charName )
-        deviceName = QString::fromUtf8 ( charModel );
-    else
-        deviceName = QString::fromUtf8 ( charName );
+    QString deviceName = device->device_entry.product;
 
     entry.insert ( UDSEntry::UDS_NAME, deviceName );
     entry.insert ( UDSEntry::UDS_ICON_NAME, QLatin1String ( "multimedia-player" ) );
