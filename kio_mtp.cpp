@@ -801,10 +801,29 @@ void MTPSlave::copy ( const KUrl& src, const KUrl& dest, int, JobFlags flags )
 
         kDebug ( KIO_MTP ) << "Copy file " << src.fileName() << "from filesystem to device" << src.directory ( KUrl::AppendTrailingSlash ) << dest.directory ( KUrl::AppendTrailingSlash );
 
-        if ( !(flags & KIO::Overwrite) && getPath( dest.path() ).first )
+        QPair<void*, LIBMTP_mtpdevice_t*> targetFile = getPath( dest.path() );
+        if (targetFile.first)
         {
-            error( ERR_FILE_ALREADY_EXIST, dest.path() );
-            return;
+            if ( !(flags & KIO::Overwrite)  )
+            {
+                    error( ERR_FILE_ALREADY_EXIST, dest.path() );
+                    return;
+            }
+
+            kDebug ( KIO_MTP ) << "The target file already exists, make sure it's deleted before the copy ...";
+            LIBMTP_file_t *mtpFile = ( LIBMTP_file_t* ) targetFile.first;
+
+            int ret = LIBMTP_Delete_Object ( m_device, mtpFile->item_id );
+
+            LIBMTP_destroy_file_t ( mtpFile );
+
+            if ( ret != 0 )
+            {
+                    error ( ERR_CANNOT_DELETE, dest.path() );
+                    return;
+            }
+
+            fileCache->removePath( dest.path() );
         }
 
         destItems.takeLast();
