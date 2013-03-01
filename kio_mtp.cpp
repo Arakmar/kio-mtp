@@ -93,6 +93,14 @@ void MTPSlave::special ( const QByteArray& data )
 bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 {
     kDebug ( KIO_MTP ) << "Opening device ...";
+    if (!rawDevice)
+    {
+        kDebug ( KIO_MTP ) << "Opening failed : null raw device";
+        return false;
+    }
+
+    // Check if we can reuse the current opened device and close it if not
+    // TODO : Multidevice support
     if (m_device)
     {
         if (rawDevice->device_entry.vendor_id == m_deviceInfo->device_entry.vendor_id
@@ -109,6 +117,8 @@ bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
         closeDevice();
     }
 
+    // Check if another kioslave is using the mtp device
+    // TODO : Multidevice support
     if (!QDBusConnection::sessionBus().isConnected())
     {
         QDBusError error(QDBusConnection::sessionBus().lastError());
