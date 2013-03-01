@@ -201,122 +201,124 @@ QPair<void*, LIBMTP_mtpdevice_t*> MTPSlave::getPath ( const QString& path )
         return ret;
     }
 
+    // Open the device
     QMap<QString, LIBMTP_raw_device_t*> devices = getRawDevices();
-    if ( devices.contains ( pathItems.at ( 0 ) ) )
+    if (!openDevice ( devices.value ( pathItems.at ( 0 ) ) ) || !m_device)
     {
-        openDevice ( devices.value ( pathItems.at ( 0 ) ) );
+        kDebug(KIO_MTP) << "Unable to open device, returning null device";
+        return ret;
     }
 
-    if ( m_device )
+    // Return a specific device
+    if ( pathItems.size() == 1 )
     {
-        // return specific device
-        if ( pathItems.size() == 1 )
-        {
-            ret.first = m_device;
-            ret.second = m_device;
+        ret.first = m_device;
+        ret.second = m_device;
 
-            kDebug(KIO_MTP) << "returning LIBMTP_mtpdevice_t";
-        }
+        kDebug(KIO_MTP) << "returning LIBMTP_mtpdevice_t";
+        return ret;
+    }
+    
+    // Check if the storage is valid
+    QMap<QString, LIBMTP_devicestorage_t*> storages = getDevicestorages ( m_device );
+    LIBMTP_devicestorage_t *storage = storages.value ( pathItems.at ( 1 ) );
+    if (!storage)
+    {
+        kDebug(KIO_MTP) << "Incorrect storage, returning null device";
+        return ret;
+    }
+    
+    // Return a specific storage for a device
+    if ( pathItems.size() == 2)
+    {
+        ret.first = storage;
+        ret.second = m_device;
 
-        if ( pathItems.size() > 2 )
+        kDebug(KIO_MTP) << "returning LIBMTP_devicestorage_t";
+        return ret;
+    }
+
+    // Return a specific file or folder
+    if ( pathItems.size() > 2 )
+    {
+        // Query Cache with the full path
+        uint32_t c_fileID = fileCache->queryPath ( path );
+        if ( c_fileID != 0 )
         {
-            // Query Cache after we have the device
-            uint32_t c_fileID = fileCache->queryPath ( path );
-            if ( c_fileID != 0 )
+            kDebug() << "Match found in cache, checking device";
+
+            LIBMTP_file_t* file = LIBMTP_Get_Filemetadata ( m_device, c_fileID );
+            if ( file )
             {
-                kDebug() << "Match found in cache, checking device";
+                kDebug ( KIO_MTP ) << "Found file in cache";
+                ret.first = file;
+                ret.second = m_device;
 
-                LIBMTP_file_t* file = LIBMTP_Get_Filemetadata ( m_device, c_fileID );
-                if ( file )
+                kDebug(KIO_MTP) << "returning LIBMTP_file_t";
+
+                return ret;
+            }
+        }
+        // Not found, we now query the cache with the parent
+        else if ( pathItems.size() > 3 )
+        {
+            QString parentPath = convertToPath ( pathItems, pathItems.size() - 1 );
+            uint32_t c_parentID = fileCache->queryPath ( parentPath );
+
+            kDebug() << "Match for parent found in cache, checking device";
+
+            LIBMTP_file_t* parent = LIBMTP_Get_Filemetadata ( m_device, c_parentID );
+            if ( parent )
+            {
+                kDebug ( KIO_MTP ) << "Found parent in cache";
+                fileCache->addPath( parentPath, c_parentID );
+
+                QMap<QString, LIBMTP_file_t*> files = getFiles ( m_device, parent->storage_id, c_parentID );
+
+                if ( files.contains ( pathItems.last() ) )
                 {
-                    kDebug ( KIO_MTP ) << "Found file in cache";
+                    LIBMTP_file_t* file = files.value( pathItems.last() );
+
                     ret.first = file;
                     ret.second = m_device;
 
                     kDebug(KIO_MTP) << "returning LIBMTP_file_t";
 
-                    return ret;
+                    fileCache->addPath( path, file->item_id );
                 }
-            }
-            // Query cache for parent
-            else if ( pathItems.size() > 3 )
-            {
-                QString parentPath = convertToPath ( pathItems, pathItems.size() - 1 );
-                uint32_t c_parentID = fileCache->queryPath ( parentPath );
-
-                kDebug() << "Match for parent found in cache, checking device";
-
-                LIBMTP_file_t* parent = LIBMTP_Get_Filemetadata ( m_device, c_parentID );
-                if ( parent )
-                {
-                    kDebug ( KIO_MTP ) << "Found parent in cache";
-                    fileCache->addPath( parentPath, c_parentID );
-
-                    QMap<QString, LIBMTP_file_t*> files = getFiles ( m_device, parent->storage_id, c_parentID );
-
-                    if ( files.contains ( pathItems.last() ) )
-                    {
-                        LIBMTP_file_t* file = files.value( pathItems.last() );
-
-                        ret.first = file;
-                        ret.second = m_device;
-
-                        kDebug(KIO_MTP) << "returning LIBMTP_file_t";
-
-                        fileCache->addPath( path, file->item_id );
-                    }
-
-                    return ret;
-                }
-            }
-        }
-
-        QMap<QString, LIBMTP_devicestorage_t*> storages = getDevicestorages ( m_device );
-
-        if ( pathItems.size() > 1 && storages.contains ( pathItems.at ( 1 ) ) )
-        {
-            LIBMTP_devicestorage_t *storage = storages.value ( pathItems.at ( 1 ) );
-
-            if ( pathItems.size() == 2 )
-            {
-                ret.first = storage;
-                ret.second = m_device;
-
-                kDebug(KIO_MTP) << "returning LIBMTP_devicestorage_t";
 
                 return ret;
             }
-
-            int currentLevel = 2, currentParent = 0xFFFFFFFF;
-
-            QMap<QString, LIBMTP_file_t*> files;
-
-            // traverse further while depth not reached
-            while ( currentLevel < pathItems.size() )
-            {
-                files = getFiles ( m_device, storage->id, currentParent );
-
-                if ( files.contains ( pathItems.at ( currentLevel ) ) )
-                {
-                    currentParent = files.value ( pathItems.at ( currentLevel ) )->item_id;
-                }
-                else
-                {
-
-                    kDebug(KIO_MTP) << "returning LIBMTP_file_t";
-
-                    return ret;
-                }
-                currentLevel++;
-            }
-
-            ret.first = LIBMTP_Get_Filemetadata ( m_device, currentParent );
-            ret.second = m_device;
-
-            fileCache->addPath ( path, currentParent );
         }
-    }
 
+        // Path not found in the cache, we now get files directly from the device
+        int currentLevel = 2, currentParent = 0xFFFFFFFF;
+        QMap<QString, LIBMTP_file_t*> files;
+
+        // traverse further while depth not reached
+        while ( currentLevel < pathItems.size() )
+        {
+            files = getFiles ( m_device, storage->id, currentParent );
+
+            if ( files.contains ( pathItems.at ( currentLevel ) ) )
+            {
+                currentParent = files.value ( pathItems.at ( currentLevel ) )->item_id;
+            }
+            else
+            {
+
+                kDebug(KIO_MTP) << "returning LIBMTP_file_t";
+
+                return ret;
+            }
+            currentLevel++;
+        }
+
+        ret.first = LIBMTP_Get_Filemetadata ( m_device, currentParent );
+        ret.second = m_device;
+
+        fileCache->addPath ( path, currentParent );
+    }
     return ret;
 }
 
