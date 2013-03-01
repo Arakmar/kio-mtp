@@ -543,18 +543,19 @@ void MTPSlave::stat ( const KUrl& url )
     QPair<void*, LIBMTP_mtpdevice_t*> pair = getPath ( url.path() );
     UDSEntry entry;
 
-    if ( pair.first )
+    // Root
+    if ( pathItems.size() < 1 )
     {
-        // Root
-        if ( pathItems.size() < 1 )
-        {
-            entry.insert ( UDSEntry::UDS_NAME, QLatin1String ( "mtp:///" ) );
-            entry.insert ( UDSEntry::UDS_FILE_TYPE, S_IFDIR );
-            entry.insert ( UDSEntry::UDS_ACCESS, S_IRUSR | S_IRGRP | S_IROTH | S_IXUSR | S_IXGRP | S_IXOTH );
-            entry.insert ( UDSEntry::UDS_MIME_TYPE, QLatin1String ( "inode/directory" ) );
-        }
+        entry.insert ( UDSEntry::UDS_NAME, QLatin1String ( "mtp:///" ) );
+        entry.insert ( UDSEntry::UDS_FILE_TYPE, S_IFDIR );
+        entry.insert ( UDSEntry::UDS_ACCESS, S_IRUSR | S_IRGRP | S_IROTH | S_IXUSR | S_IXGRP | S_IXOTH );
+        entry.insert ( UDSEntry::UDS_MIME_TYPE, QLatin1String ( "inode/directory" ) );
+    }
+        
+    else if ( pair.first )
+    {
         // Device
-        else if ( pathItems.size() < 2 )
+        if ( pathItems.size() < 2 )
         {
             QMap<QString, LIBMTP_raw_device_t*> devices = getRawDevices();
             LIBMTP_raw_device_t *device = devices.value(pathItems.at(0));
@@ -570,14 +571,16 @@ void MTPSlave::stat ( const KUrl& url )
         {
             getEntry ( entry, ( LIBMTP_file_t* ) pair.first );
         }
-        statEntry ( entry );
-        finished();
     }
     else
     {
         error(ERR_COULD_NOT_STAT, url.path());
         kDebug ( KIO_MTP ) << "[ERROR]";
+        return;
     }
+    
+    statEntry ( entry );
+    finished();
 }
 
 void MTPSlave::mimetype ( const KUrl& url )
