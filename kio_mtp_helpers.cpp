@@ -375,7 +375,7 @@ QMap<QString, LIBMTP_raw_device_t*> getRawDevices()
 //             else
 //                 name = QString::fromUtf8 ( deviceName );
 
-		devices.insert ( QString::fromUtf8(rawdevices[i].device_entry.product), &rawdevices[i] );
+        devices.insert ( QString::fromUtf8(rawdevices[i].device_entry.product), &rawdevices[i] );
 
 //             LIBMTP_Release_Device ( device );
         }

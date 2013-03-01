@@ -85,90 +85,90 @@ MTPSlave::~MTPSlave()
 
 void MTPSlave::special ( const QByteArray& data )
 {
-	Q_UNUSED(data);
-	kDebug ( KIO_MTP ) << "Idle timeout, we can now close the session";
-	closeDevice();
+    Q_UNUSED(data);
+    kDebug ( KIO_MTP ) << "Idle timeout, we can now close the session";
+    closeDevice();
 }
 
 bool MTPSlave::openDevice(LIBMTP_raw_device_t *rawDevice)
 {
-	kDebug ( KIO_MTP ) << "Opening device ...";
-	if (m_device)
-	{
-		if (rawDevice->device_entry.vendor_id == m_deviceInfo->device_entry.vendor_id
-			&& rawDevice->device_entry.product_id == m_deviceInfo->device_entry.product_id
-			&& rawDevice->bus_location == m_deviceInfo->bus_location
-			&& rawDevice->devnum == m_deviceInfo->devnum)
-		{
-			setTimeoutSpecialCommand(3);
-			kDebug ( KIO_MTP ) << "Device already open !";
-			return true;
-		}
+    kDebug ( KIO_MTP ) << "Opening device ...";
+    if (m_device)
+    {
+        if (rawDevice->device_entry.vendor_id == m_deviceInfo->device_entry.vendor_id
+            && rawDevice->device_entry.product_id == m_deviceInfo->device_entry.product_id
+            && rawDevice->bus_location == m_deviceInfo->bus_location
+            && rawDevice->devnum == m_deviceInfo->devnum)
+        {
+            setTimeoutSpecialCommand(3);
+            kDebug ( KIO_MTP ) << "Device already open !";
+            return true;
+        }
 
-		kDebug ( KIO_MTP ) << "A new device needs to be opened, closing the previous one ...";
-		closeDevice();
-	}
+        kDebug ( KIO_MTP ) << "A new device needs to be opened, closing the previous one ...";
+        closeDevice();
+    }
 
-	if (!QDBusConnection::sessionBus().isConnected())
-	{
-		QDBusError error(QDBusConnection::sessionBus().lastError());
-		kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
-	}
-	else if (!QDBusConnection::sessionBus().registerService("org.kde.kio_mtp"))
-	{
-		kDebug ( KIO_MTP ) << "DBUS Service already registered, another kioslave is using the device !";
-		kDebug ( KIO_MTP ) << "Trying to wait for the release of the device ...";
-		while (!QDBusConnection::sessionBus().registerService("org.kde.kio_mtp"))
-		{
-			sleep(1);
-		}
-		kDebug ( KIO_MTP ) << "The device is free !";
-	}
-	else
-	{
-		kDebug ( KIO_MTP ) << "DBUS Service registration successful !";
-	}
+    if (!QDBusConnection::sessionBus().isConnected())
+    {
+        QDBusError error(QDBusConnection::sessionBus().lastError());
+        kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
+    }
+    else if (!QDBusConnection::sessionBus().registerService("org.kde.kio_mtp"))
+    {
+        kDebug ( KIO_MTP ) << "DBUS Service already registered, another kioslave is using the device !";
+        kDebug ( KIO_MTP ) << "Trying to wait for the release of the device ...";
+        while (!QDBusConnection::sessionBus().registerService("org.kde.kio_mtp"))
+        {
+            sleep(1);
+        }
+        kDebug ( KIO_MTP ) << "The device is free !";
+    }
+    else
+    {
+        kDebug ( KIO_MTP ) << "DBUS Service registration successful !";
+    }
 
-	m_device = LIBMTP_Open_Raw_Device_Uncached(rawDevice);
-	if (!m_device)
-	{
-		kDebug ( KIO_MTP ) << "Could not open MTP device !";
-		return false;
-	}
+    m_device = LIBMTP_Open_Raw_Device_Uncached(rawDevice);
+    if (!m_device)
+    {
+        kDebug ( KIO_MTP ) << "Could not open MTP device !";
+        return false;
+    }
 
-	m_deviceInfo = rawDevice;
-	setTimeoutSpecialCommand(3);
-	kDebug ( KIO_MTP ) << "Device opened !";
+    m_deviceInfo = rawDevice;
+    setTimeoutSpecialCommand(3);
+    kDebug ( KIO_MTP ) << "Device opened !";
 
-	return true;
+    return true;
 }
 
 void MTPSlave::closeDevice()
 {
-	if (!m_device)
-	{
-		kDebug ( KIO_MTP ) << "Nothing to close ...";
-		return;
-	}
+    if (!m_device)
+    {
+        kDebug ( KIO_MTP ) << "Nothing to close ...";
+        return;
+    }
 
-	LIBMTP_Release_Device(m_device);
-	m_device = 0;
-	m_deviceInfo = 0;
+    LIBMTP_Release_Device(m_device);
+    m_device = 0;
+    m_deviceInfo = 0;
 
-	if (!QDBusConnection::sessionBus().isConnected())
-	{
-		QDBusError error(QDBusConnection::sessionBus().lastError());
-		kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
-	}
-	else if (!QDBusConnection::sessionBus().unregisterService("org.kde.kio_mtp"))
-	{
-		kDebug ( KIO_MTP ) << "DBUS Service unregistration failed !";
-	}
-	else
-	{
-		kDebug ( KIO_MTP ) << "DBUS Service unregistration successful !";
-	}
-	kDebug ( KIO_MTP ) << "Device closed !";
+    if (!QDBusConnection::sessionBus().isConnected())
+    {
+        QDBusError error(QDBusConnection::sessionBus().lastError());
+        kDebug ( KIO_MTP ) << "Could not connect to DBUS" << qPrintable(error.name()) << qPrintable(error.message());
+    }
+    else if (!QDBusConnection::sessionBus().unregisterService("org.kde.kio_mtp"))
+    {
+        kDebug ( KIO_MTP ) << "DBUS Service unregistration failed !";
+    }
+    else
+    {
+        kDebug ( KIO_MTP ) << "DBUS Service unregistration successful !";
+    }
+    kDebug ( KIO_MTP ) << "Device closed !";
 }
 
 /**
