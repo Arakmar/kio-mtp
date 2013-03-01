@@ -440,8 +440,7 @@ void MTPSlave::listDir ( const KUrl& url )
         kDebug ( KIO_MTP ) << "[SUCCESS] :: Devices";
         finished();
     }
-
-    if ( pair.first && device)
+    else if ( pair.first && device)
     {
         // Device, list storages
         if ( pathItems.size() == 1 )
@@ -571,9 +570,14 @@ void MTPSlave::stat ( const KUrl& url )
         {
             getEntry ( entry, ( LIBMTP_file_t* ) pair.first );
         }
+        statEntry ( entry );
+        finished();
     }
-    statEntry ( entry );
-    finished();
+    else
+    {
+        error(ERR_COULD_NOT_STAT, url.path());
+        kDebug ( KIO_MTP ) << "[ERROR]";
+    }
 }
 
 void MTPSlave::mimetype ( const KUrl& url )
