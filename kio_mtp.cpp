@@ -405,7 +405,7 @@ void MTPSlave::listDir ( const KUrl& url )
     LIBMTP_mtpdevice_t *device = pair.second;
 
     // list devices
-    if ( pathItems.size() == 0 || !device)
+    if ( pathItems.size() == 0)
     {
         kDebug ( KIO_MTP ) << "Root directory, listing devices";
 
@@ -440,85 +440,77 @@ void MTPSlave::listDir ( const KUrl& url )
         kDebug ( KIO_MTP ) << "[SUCCESS] :: Devices";
         finished();
     }
-    // traverse into device
-    else if ( devices.contains ( pathItems.at ( 0 ) ) )
+
+    if ( pair.first && device)
     {
-        if ( pair.first )
+        // Device, list storages
+        if ( pathItems.size() == 1 )
         {
-            // Device, list storages
-            if ( pathItems.size() == 1 )
+            QMap<QString, LIBMTP_devicestorage_t*> storages = getDevicestorages ( device );
+
+            kDebug ( KIO_MTP ) << "Listing storages for device " << pathItems.at ( 0 );
+            totalSize ( storages.size() );
+
+            if ( storages.size() > 0 )
             {
-                QMap<QString, LIBMTP_devicestorage_t*> storages = getDevicestorages ( device );
-
-                kDebug ( KIO_MTP ) << "Listing storages for device " << pathItems.at ( 0 );
-                totalSize ( storages.size() );
-
-                if ( storages.size() > 0 )
+                foreach ( const QString &storageName, storages.keys() )
                 {
-                    foreach ( const QString &storageName, storages.keys() )
-                    {
-                        getEntry ( entry, storages.value ( storageName ) );
-
-                        listEntry ( entry, false );
-                        entry.clear();
-                        kDebug ( KIO_MTP ) << "Found " << storageName;
-                    }
-
-                    listEntry ( entry, true );
-                    kDebug ( KIO_MTP ) << "[SUCCESS] :: Storages";
-                }
-                else
-                {
-                    warning( tr("No Storages found. Maybe you need to unlock your device?") );
-                }
-            }
-            // Storage, list files and folders of storage root
-            else
-            {
-                QMap<QString, LIBMTP_file_t*> files;
-
-                if ( pathItems.size() == 2 )
-                {
-                    kDebug(KIO_MTP) << "Getting storage root listing";
-
-                    LIBMTP_devicestorage_t *storage = (LIBMTP_devicestorage_t*)pair.first;
-
-                    kDebug(KIO_MTP) << "We have a storage:" << (storage == NULL);
-
-                    files = getFiles( device, storage->id );
-                }
-                else
-                {
-                    LIBMTP_file_t *parent = (LIBMTP_file_t*)pair.first;
-
-                    files = getFiles( device, parent->storage_id, parent->item_id );
-                }
-
-                for ( QMap<QString, LIBMTP_file_t*>::iterator it = files.begin(); it != files.end(); it++ )
-                {
-                    LIBMTP_file_t *file = it.value();
-
-                    QString filePath = url.path( KUrl::AddTrailingSlash ).append( it.key() );
-                    fileCache->addPath( filePath, file->item_id );
-
-                    getEntry ( entry, file );
+                    getEntry ( entry, storages.value ( storageName ) );
 
                     listEntry ( entry, false );
                     entry.clear();
+                    kDebug ( KIO_MTP ) << "Found " << storageName;
                 }
 
                 listEntry ( entry, true );
-
-                kDebug ( KIO_MTP ) << "[SUCCESS] Files";
+                kDebug ( KIO_MTP ) << "[SUCCESS] :: Storages";
             }
-
-            finished();
+            else
+            {
+                warning( tr("No Storages found. Maybe you need to unlock your device?") );
+            }
         }
+        // Storage, list files and folders of storage root
         else
         {
-            error ( ERR_CANNOT_ENTER_DIRECTORY, url.path() );
-            kDebug ( KIO_MTP ) << "[ERROR]";
+            QMap<QString, LIBMTP_file_t*> files;
+
+            if ( pathItems.size() == 2 )
+            {
+                kDebug(KIO_MTP) << "Getting storage root listing";
+
+                LIBMTP_devicestorage_t *storage = (LIBMTP_devicestorage_t*)pair.first;
+
+                kDebug(KIO_MTP) << "We have a storage:" << (storage == NULL);
+
+                files = getFiles( device, storage->id );
+            }
+            else
+            {
+                LIBMTP_file_t *parent = (LIBMTP_file_t*)pair.first;
+
+                files = getFiles( device, parent->storage_id, parent->item_id );
+            }
+
+            for ( QMap<QString, LIBMTP_file_t*>::iterator it = files.begin(); it != files.end(); it++ )
+            {
+                LIBMTP_file_t *file = it.value();
+
+                QString filePath = url.path( KUrl::AddTrailingSlash ).append( it.key() );
+                fileCache->addPath( filePath, file->item_id );
+
+                getEntry ( entry, file );
+
+                listEntry ( entry, false );
+                entry.clear();
+            }
+
+            listEntry ( entry, true );
+
+            kDebug ( KIO_MTP ) << "[SUCCESS] Files";
         }
+
+        finished();
     }
     else
     {
